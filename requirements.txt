@@ -1,6 +1,7 @@
 pyTelegramBotAPI
 Flask
-requests
 pandas
+numpy
+requests
 lxml
-soccerdata
+html5lib
