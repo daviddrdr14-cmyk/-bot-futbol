@@ -42,7 +42,10 @@ def get_stats(team,liga):
   btts=int(((d["FTHG"]>0)&(d["FTAG"]>0)).mean()*100)
   corn=round((d["HC"]+d["AC"]).mean(),1)
   corn_ht=round((d["HC"]+d["AC"]).mean()*0.45,1)
-  return {"name":team.title(),"n":len(d),"liga":liga,"ht":ht,"o15":o15,"o25":o25,"btts":btts,"corn":corn,"corn_ht":corn_ht}
+  cards=round((d["HY"]+d["AY"]).mean()+0.3,1)
+  shots=round(float(np.mean(tiros)),1)
+  soton=round(float(np.mean(sot)),1)
+  return {"name":team.title(),"n":len(d),"liga":liga,"ht":ht,"o15":o15,"o25":o25,"btts":btts,"corn":corn,"corn_ht":corn_ht,"cards":cards,"shots":shots,"sot":soton}
  except: return None
 
 def detect_liga(t):
@@ -75,22 +78,31 @@ def handle(m):
   s1=get_stats(l,liga); s2=get_stats(v,liga)
   if not s1 or not s2:
    bot.reply_to(m,"No encontre "+l+" o "+v);return
-  rec=""
   avg_ht=int((s1['ht']+s2['ht'])/2)
   avg_o15=int((s1['o15']+s2['o15'])/2)
   avg_o25=int((s1['o25']+s2['o25'])/2)
+  avg_btts=int((s1['btts']+s2['btts'])/2)
+  avg_corn=(s1['corn']+s2['corn'])/2
+  rec=""
   if avg_ht>=70: rec+="GOL 1T SI "+str(avg_ht)+"%\n"
   if avg_o15>=80: rec+="OVER 1.5 "+str(avg_o15)+"%\n"
   if avg_o25>=70: rec+="OVER 2.5 "+str(avg_o25)+"%\n"
-  if avg_o15<=40: rec+="UNDER 1.5\n"
-  if not rec: rec="Partido cerrado"
+  if avg_btts>=70: rec+="BTTS SI "+str(avg_btts)+"%\n"
+  if avg_corn>=9: rec+="OVER 8.5 CORNERS "+str(round(avg_corn,1))+"\n"
+  if not rec: rec="Partido cerrado sin valor claro\n"
   res=s1['name']+" vs "+s2['name']+" - "+liga+" Ult "+str(s1['n'])+"J\n"
+  res+="1T REAL\n"
   res+="Gol 1T: "+str(s1['ht'])+"% | "+str(s2['ht'])+"% -> "+str(avg_ht)+"%\n"
+  res+="Corner 1T: "+str(s1['corn_ht'])+" | "+str(s2['corn_ht'])+"\n\n"
+  res+="TOTALES\n"
   res+="O1.5 "+str(s1['o15'])+"%/"+str(s2['o15'])+"% O2.5 "+str(s1['o25'])+"%/"+str(s2['o25'])+"%\n"
-  res+="Corners "+str(s1['corn'])+"/"+str(s2['corn'])+"\n"
-  res+="RECOM:\n"+rec
+  res+="BTTS "+str(s1['btts'])+"%/"+str(s2['btts'])+"%\n"
+  res+="Corners "+str(s1['corn'])+"/"+str(s2['corn'])+" Tarj "+str(s1['cards'])+"/"+str(s2['cards'])+"\n"
+  res+="Tiros "+str(s1['shots'])+"/"+str(s2['shots'])+" Puerta "+str(s1['sot'])+"/"+str(s2['sot'])+"\n\n"
+  res+="RECOM:\n"+rec+"\n"
+  res+="football-data "+liga+" REAL"
   bot.reply_to(m,res)
  except Exception as e: print(e)
 
-print("BOT LISTO",flush=True)
+print("BOT FINAL COMPLETO",flush=True)
 bot.infinity_polling(timeout=90,long_polling_timeout=90,skip_pending=True)
