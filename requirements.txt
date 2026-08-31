@@ -1,5 +1,4 @@
 pyTelegramBotAPI
 pandas
 Flask
-Pillow
-pytesseract
+requests
