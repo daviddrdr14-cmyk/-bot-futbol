@@ -6,7 +6,7 @@ import telebot
 
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Bot HT SofaScore Live!"
+def home(): return "Bot FIX!"
 Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT",10000))), daemon=True).start()
 
 load_dotenv()
@@ -15,83 +15,90 @@ bot.remove_webhook()
 time.sleep(2)
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "Accept": "application/json"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer": "https://www.sofascore.com/",
+    "Origin": "https://www.sofascore.com",
+    "Accept": "application/json, text/plain, */*"
 }
 
-def get_team_and_stats(nombre):
-    # 1. Buscar equipo
-    search = requests.get(f"https://api.sofascore.com/api/v1/search/all", params={"q": nombre}, headers=HEADERS, timeout=10).json()
-    teams = [r for r in search.get('results', []) if r.get('type') == 'team']
-    if not teams:
-        return None, None
-    team = teams[0]['entity']
-    team_id = team['id']
-    team_name = team['name']
+# MAPA DIRECTO PARA QUE NO FALLE - Agrega los que uses
+TEAMS_MAP = {
+    "monterrey": 19589, "rayados": 19589,
+    "san luis": 122124, "atletico san luis": 122124,
+    "america": 19595, "club america": 19595,
+    "chivas": 19593, "guadalajara": 19593,
+    "tigres": 19592, "cruz azul": 19594,
+    "aston villa": 40, "arsenal": 42,
+    "man city": 17, "manchester city": 17,
+    "liverpool": 44, "chelsea": 38, "barcelona": 2817, "real madrid": 2829
+}
 
-    # 2. Últimos partidos
-    url = f"https://api.sofascore.com/api/v1/team/{team_id}/events/last/0"
-    r = requests.get(url, headers=HEADERS, timeout=10).json()
-    events = r.get('events', [])[:5]
+def get_stats(nombre):
+    nombre_low = nombre.lower().strip()
+    team_id = TEAMS_MAP.get(nombre_low)
+    team_name = nombre.title()
 
-    if not events:
-        return team_name, None
-
-    con_gol_ht = 0
-    for ev in events:
-        ht = ev.get('time', {}).get('halftime') or ev.get('halftimeScore')
-        # Sofascore a veces lo manda en homeScore halftime
+    if not team_id:
         try:
-            h = ev['homeScore'].get('period1', 0)
-            a = ev['awayScore'].get('period1', 0)
-            if h + a > 0:
-                con_gol_ht += 1
-        except:
-            pass
+            # Intento 1: Buscador
+            s = requests.get("https://api.sofascore.com/api/v1/search/all", params={"q": nombre}, headers=HEADERS, timeout=15).json()
+            results = s.get('results', [])
+            print(f"SEARCH {nombre}: {results[:1]}")
+            for r in results:
+                if r.get('type') == 'team':
+                    team_id = r['entity']['id']
+                    team_name = r['entity']['name']
+                    break
+            if not team_id:
+                # Intento 2: endpoint teams
+                s2 = requests.get(f"https://api.sofascore.com/api/v1/search/teams", params={"q": nombre}, headers=HEADERS, timeout=15).json()
+                if s2.get('results'):
+                    team_id = s2['results'][0]['entity']['id']
+                    team_name = s2['results'][0]['entity']['name']
+        except Exception as e:
+            print("SEARCH ERROR:", e)
 
-    prob = int((con_gol_ht / len(events)) * 100) if events else 0
-    return team_name, {"prob": prob, "total": len(events), "con_gol": con_gol_ht}
+    if not team_id:
+        return None
+
+    try:
+        ev = requests.get(f"https://api.sofascore.com/api/v1/team/{team_id}/events/last/0", headers=HEADERS, timeout=15).json()
+        events = ev.get('events', [])[:5]
+        if not events: return None
+        ht = btts = o15 = o25 = 0
+        for e in events:
+            h1 = e['homeScore'].get('period1',0); a1 = e['awayScore'].get('period1',0)
+            h = e['homeScore'].get('current',0); a = e['awayScore'].get('current',0)
+            if h1+a1>0: ht+=1
+            if h>=1 and a>=1: btts+=1
+            if h+a>=2: o15+=1
+            if h+a>=3: o25+=1
+        n = len(events)
+        return {"name": team_name, "ht": int(ht/n*100), "btts": int(btts/n*100), "o15": int(o15/n*100), "o25": int(o25/n*100), "n": n, "ht_c": ht}
+    except Exception as e:
+        print("EVENTS ERROR:", e)
+        return None
 
 @bot.message_handler(func=lambda m: True)
 def handler(m):
-    if "vs" not in m.text.lower():
-        bot.reply_to(m, "Formato: Monterrey vs San Luis")
+    if "vs" not in m.text.lower(): return
+    l_raw, v_raw = [x.strip() for x in m.text.split("vs",1)]
+    bot.send_chat_action(m.chat.id, 'typing')
+    s1 = get_stats(l_raw)
+    s2 = get_stats(v_raw)
+    if not s1 or not s2:
+        bot.reply_to(m, f"No jalo el ID. Mándame log de Render. Intenté: {l_raw} y {v_raw}")
         return
-    try:
-        local_raw, visita_raw = [x.strip() for x in m.text.split("vs", 1)]
-        bot.send_chat_action(m.chat.id, 'typing')
+    ht = int((s1['ht']+s2['ht'])/2)
+    bot.reply_to(m, f"""📊 *{s1['name']} vs {s2['name']} - REAL*
 
-        name1, stats1 = get_team_and_stats(local_raw)
-        name2, stats2 = get_team_and_stats(visita_raw)
+HT: {s1['ht']}% ({s1['ht_c']}/{s1['n']}) | {s2['ht']}%
+🔥 *COMBINADO HT: {ht}%* - {'FUERTE ✅' if ht>=70 else 'MEDIO' if ht>=55 else 'NO ❌'}
 
-        if not stats1 or not stats2:
-            bot.reply_to(m, f"No encontré uno de los equipos. Intenta poner nombre completo: ej 'Monterrey' no 'Rayados'")
-            return
+Over 1.5: {int((s1['o15']+s2['o15'])/2)}% | BTTS: {int((s1['btts']+s2['btts'])/2)}%
 
-        prob_final = int((stats1['prob'] + stats2['prob']) / 2)
+PICK: {'OVER 0.5 HT' if ht>=65 else 'ESPERAR LIVE'}
+""", parse_mode="Markdown")
 
-        if prob_final >= 80: pick = "🔥 OVER 0.5 HT - ENTRADA FUERTE"; cuota = "1.35-1.50"
-        elif prob_final >= 65: pick = "⚽ OVER 0.5 HT"; cuota = "1.55-1.75"
-        else: pick = "❌ NO BET - Irse a Corners o esperar live min 20"; cuota = "1.90+"
-
-        msg = f"""📊 *ANÁLISIS SOFASCORE REAL*
-
-🏟️ *{name1} vs {name2}*
-
-📈 {name1}: {stats1['con_gol']}/{stats1['total']} con gol HT ({stats1['prob']}%)
-📈 {name2}: {stats2['con_gol']}/{stats2['total']} con gol HT ({stats2['prob']}%)
-
-🔥 *Probabilidad Combinada Gol HT: {prob_final}%*
-
-💰 *PICK: {pick}*
-📊 Cuota estimada: {cuota}
-
-_SofaScore Last 5 games - HT Period1_
-"""
-        bot.reply_to(m, msg, parse_mode="Markdown")
-    except Exception as e:
-        print("ERROR:", e)
-        bot.reply_to(m, f"Error SofaScore: {e} - Intenta con otro nombre")
-
-print("BOT LISTO - SOFASCORE REAL")
+print("BOT FIX LISTO")
 bot.infinity_polling(skip_pending=True)
