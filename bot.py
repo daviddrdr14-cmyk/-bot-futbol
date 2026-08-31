@@ -5,61 +5,92 @@ import telebot
 
 app = Flask(__name__)
 @app.route('/')
-def home(): return "BOT V23.2"
-Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
+def home(): return "OK"
+Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT",10000))), daemon=True).start()
 
-TOKEN = os.getenv("BOT_TOKEN")
-bot = telebot.TeleBot(TOKEN)
+TOKEN=os.getenv("BOT_TOKEN")
+bot=telebot.TeleBot(TOKEN)
 bot.remove_webhook()
 time.sleep(1)
 
 def clean(t):
-    t = unicodedata.normalize('NFD', t)
-    t = ''.join(c for c in t if unicodedata.category(c)!= 'Mn')
-    return t.lower().strip()
+ t=unicodedata.normalize('NFD',t)
+ t=''.join(c for c in t if unicodedata.category(c)!='Mn')
+ return t.lower().strip()
 
-def get_stats(team, liga):
-    try:
-        team_c = clean(team)
-        df = pd.read_csv("https://www.football-data.co.uk/mmz4281/2526/"+liga+".csv")
-        df['HomeTeam_c'] = df['HomeTeam'].apply(lambda x: clean(str(x)))
-        df['AwayTeam_c'] = df['AwayTeam'].apply(lambda x: clean(str(x)))
-        mask = df['HomeTeam_c'].str.contains(team_c, na=False)
-        mask = mask | df['AwayTeam_c'].str.contains(team_c, na=False)
-        df_t = df[mask].tail(5)
-        if df_t.empty:
-            mask2 = df['HomeTeam_c'].str.contains(team_c[:4], na=False)
-            mask2 = mask2 | df['AwayTeam_c'].str.contains(team_c[:4], na=False)
-            df_t = df[mask2].tail(5)
-        if df_t.empty:
-            df_t = df.tail(5)
-        fd = team.title()
-        tiros=[]
-        sot=[]
-        for _,r in df_t.iterrows():
-            if team_c in r['HomeTeam_c']:
-                tiros.append(r.get("HS",12))
-                sot.append(r.get("HST",4))
-            else:
-                tiros.append(r.get("AS",11))
-                sot.append(r.get("AST",3.5))
-        ht = int(((df_t["HTHG"]+df_t["HTAG"])>0).mean()*100)
-        o15 = int(((df_t["FTHG"]+df_t["FTAG"])>1.5).mean()*100)
-        o25 = int(((df_t["FTHG"]+df_t["FTAG"])>2.5).mean()*100)
-        btts = int(((df_t["FTHG"]>0)&(df_t["FTAG"]>0)).mean()*100)
-        corn = round((df_t["HC"]+df_t["AC"]).mean(),1)
-        corn_ht = round((df_t["HC"]+df_t["AC"]).mean()*0.45,1)
-        cards = round((df_t["HY"]+df_t["AY"]).mean()+0.3,1)
-        shots = round(float(np.mean(tiros)),1)
-        soton = round(float(np.mean(sot)),1)
-        return {"name":fd,"n":len(df_t),"liga":liga,"ht":ht,"o15":o15,"o25":o25,"btts":btts,"corn":corn,"corn_ht":corn_ht,"cards":cards,"shots":shots,"sot":soton}
-    except:
-        return None
+def get_stats(team,liga):
+ try:
+  tc=clean(team)
+  df=pd.read_csv("https://www.football-data.co.uk/mmz4281/2526/"+liga+".csv")
+  df['hc']=df['HomeTeam'].apply(lambda x: clean(str(x)))
+  df['ac']=df['AwayTeam'].apply(lambda x: clean(str(x)))
+  m=df['hc'].str.contains(tc,na=False)|df['ac'].str.contains(tc,na=False)
+  d=df[m].tail(5)
+  if d.empty:
+   m2=df['hc'].str.contains(tc[:4],na=False)|df['ac'].str.contains(tc[:4],na=False)
+   d=df[m2].tail(5)
+  if d.empty: d=df.tail(5)
+  tiros=[];sot=[]
+  for _,r in d.iterrows():
+   if tc in r['hc']:
+    tiros.append(r.get("HS",12));sot.append(r.get("HST",4))
+   else:
+    tiros.append(r.get("AS",11));sot.append(r.get("AST",3.5))
+  ht=int(((d["HTHG"]+d["HTAG"])>0).mean()*100)
+  o15=int(((d["FTHG"]+d["FTAG"])>1.5).mean()*100)
+  o25=int(((d["FTHG"]+d["FTAG"])>2.5).mean()*100)
+  btts=int(((d["FTHG"]>0)&(d["FTAG"]>0)).mean()*100)
+  corn=round((d["HC"]+d["AC"]).mean(),1)
+  corn_ht=round((d["HC"]+d["AC"]).mean()*0.45,1)
+  return {"name":team.title(),"n":len(d),"liga":liga,"ht":ht,"o15":o15,"o25":o25,"btts":btts,"corn":corn,"corn_ht":corn_ht}
+ except: return None
 
 def detect_liga(t):
-    t=clean(t)
-    if any(k in t for k in ["benfica","porto","sporting","braga","estoril","guimaraes"]): return "P1"
-    if any(k in t for k in ["brugge","anderlecht","genk","antwerp","gent"]): return "B1"
-    if any(k in t for k in ["ajax","psv","feyenoord","az","twente"]): return "N1"
-    if any(k in t for k in ["galatasaray","fenerbahce","besiktas"]): return "T1"
-    if any(k in t for k in ["olympi
+ t=clean(t)
+ if "benfica" in t or "porto" in t or "braga" in t: return "P1"
+ if "estoril" in t or "guimaraes" in t: return "P1"
+ if "brugge" in t or "anderlecht" in t or "genk" in t: return "B1"
+ if "ajax" in t or "psv" in t or "feyenoord" in t: return "N1"
+ if "galatasaray" in t or "fenerbahce" in t: return "T1"
+ if "olympiacos" in t or "panathinaikos" in t: return "G1"
+ if "celtic" in t or "rangers" in t: return "SC0"
+ if "bayern" in t or "dortmund" in t or "leverkusen" in t: return "D1"
+ if "psg" in t or "marseille" in t or "lille" in t: return "F1"
+ if "lecce" in t or "atalanta" in t or "inter" in t: return "I1"
+ if "milan" in t or "juventus" in t or "juve" in t: return "I1"
+ if "napoli" in t or "roma" in t or "lazio" in t: return "I1"
+ if "arsenal" in t or "aston" in t or "city" in t: return "E0"
+ if "liverpool" in t or "chelsea" in t or "united" in t: return "E0"
+ return "SP1"
+
+@bot.message_handler(func=lambda m: True)
+def handle(m):
+ try:
+  txt=clean(m.text)
+  if "vs" not in txt: return
+  p=re.split(r'\s+v+s+\s*',txt)
+  if len(p)<2: p=txt.split("vs")
+  l=p[0].strip(); v=p[1].strip()
+  liga=detect_liga(l+" "+v)
+  s1=get_stats(l,liga); s2=get_stats(v,liga)
+  if not s1 or not s2:
+   bot.reply_to(m,"No encontre "+l+" o "+v);return
+  rec=""
+  avg_ht=int((s1['ht']+s2['ht'])/2)
+  avg_o15=int((s1['o15']+s2['o15'])/2)
+  avg_o25=int((s1['o25']+s2['o25'])/2)
+  if avg_ht>=70: rec+="GOL 1T SI "+str(avg_ht)+"%\n"
+  if avg_o15>=80: rec+="OVER 1.5 "+str(avg_o15)+"%\n"
+  if avg_o25>=70: rec+="OVER 2.5 "+str(avg_o25)+"%\n"
+  if avg_o15<=40: rec+="UNDER 1.5\n"
+  if not rec: rec="Partido cerrado"
+  res=s1['name']+" vs "+s2['name']+" - "+liga+" Ult "+str(s1['n'])+"J\n"
+  res+="Gol 1T: "+str(s1['ht'])+"% | "+str(s2['ht'])+"% -> "+str(avg_ht)+"%\n"
+  res+="O1.5 "+str(s1['o15'])+"%/"+str(s2['o15'])+"% O2.5 "+str(s1['o25'])+"%/"+str(s2['o25'])+"%\n"
+  res+="Corners "+str(s1['corn'])+"/"+str(s2['corn'])+"\n"
+  res+="RECOM:\n"+rec
+  bot.reply_to(m,res)
+ except Exception as e: print(e)
+
+print("BOT LISTO",flush=True)
+bot.infinity_polling(timeout=90,long_polling_timeout=90,skip_pending=True)
